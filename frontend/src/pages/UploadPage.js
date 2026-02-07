@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'sonner';
@@ -12,6 +12,21 @@ const UploadPage = () => {
   const [previewUrl, setPreviewUrl] = useState(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
+  const [languages, setLanguages] = useState({});
+  const [selectedLanguage, setSelectedLanguage] = useState('en');
+
+  useEffect(() => {
+    fetchLanguages();
+  }, []);
+
+  const fetchLanguages = async () => {
+    try {
+      const response = await axios.get(`${API}/languages`);
+      setLanguages(response.data.languages);
+    } catch (error) {
+      console.error('Error fetching languages:', error);
+    }
+  };
 
   const handleFileSelect = (event) => {
     const file = event.target.files[0];
@@ -50,11 +65,12 @@ const UploadPage = () => {
       
       const response = await axios.post(`${API}/prescriptions/upload`, {
         image_base64: base64Image,
-        patient_id: 'default-patient'
+        patient_id: 'default-patient',
+        preferred_language: selectedLanguage
       });
 
       setResult(response.data);
-      toast.success('Prescription analyzed successfully!');
+      toast.success('Prescription analyzed successfully! 🎉');
     } catch (error) {
       console.error('Upload error:', error);
       toast.error(error.response?.data?.detail || 'Failed to analyze prescription');
@@ -71,11 +87,32 @@ const UploadPage = () => {
             Upload Your Prescription
           </h1>
           <p className="text-lg md:text-xl leading-relaxed text-stone-600 font-jakarta">
-            Take a clear photo of your prescription. Our AI will extract and explain all medications.
+            📸 Take a clear photo in <strong>any language</strong>. Our AI will extract and translate all medications.
           </p>
         </div>
 
-        <div className="bg-white rounded-3xl border border-stone-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-8">
+        <div className="bg-white rounded-3xl border border-stone-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-8 mb-6">
+          <div className="mb-6">
+            <label className="block text-sm font-bold uppercase tracking-widest text-stone-500 font-jakarta mb-3">
+              🌍 Preferred Language for Explanations
+            </label>
+            <select
+              value={selectedLanguage}
+              onChange={(e) => setSelectedLanguage(e.target.value)}
+              className="w-full h-14 rounded-2xl border-stone-200 bg-stone-50 px-4 focus:ring-2 focus:ring-sage/20 focus:border-sage transition-all text-lg font-jakarta"
+              data-testid="language-selector"
+            >
+              {Object.entries(languages).map(([code, name]) => (
+                <option key={code} value={code}>
+                  {name}
+                </option>
+              ))}
+            </select>
+            <p className="text-sm text-stone-500 font-jakarta mt-2">
+              💡 Your prescription can be in any language. We'll translate everything to {languages[selectedLanguage] || 'English'}.
+            </p>
+          </div>
+
           <div className="space-y-6">
             <div>
               <label
@@ -94,6 +131,7 @@ const UploadPage = () => {
                       <span className="font-semibold">Click to upload</span> or drag and drop
                     </p>
                     <p className="text-xs text-stone-500 font-jakarta">PNG, JPG, JPEG, or WEBP</p>
+                    <p className="text-xs text-sage font-jakarta font-semibold mt-2">✨ Supports prescriptions in any language</p>
                   </div>
                 )}
                 <input
@@ -132,7 +170,7 @@ const UploadPage = () => {
               className="w-full rounded-full bg-sage text-white px-8 py-4 font-semibold font-jakarta shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed"
               data-testid="analyze-button"
             >
-              {loading ? 'Analyzing...' : 'Analyze Prescription'}
+              {loading ? '🔄 Analyzing & Translating...' : '🚀 Analyze Prescription'}
             </button>
           </div>
         </div>
@@ -140,15 +178,25 @@ const UploadPage = () => {
         {result && (
           <div className="mt-12 space-y-6" data-testid="analysis-results">
             <div className="bg-white rounded-3xl border border-stone-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-8">
-              <h2 className="font-fraunces text-3xl font-semibold text-stone-900 mb-4">
-                Extracted Text
-              </h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-fraunces text-3xl font-semibold text-stone-900">
+                  Extracted Text
+                </h2>
+                <div className="flex gap-2">
+                  <span className="bg-stone-100 text-stone-700 px-4 py-2 rounded-full text-sm font-jakarta font-medium">
+                    📄 Detected: {result.detected_language?.toUpperCase() || 'Unknown'}
+                  </span>
+                  <span className="bg-sage/10 text-sage px-4 py-2 rounded-full text-sm font-jakarta font-medium">
+                    🌐 Translated to: {languages[result.preferred_language] || 'English'}
+                  </span>
+                </div>
+              </div>
               <p className="text-stone-700 font-jakarta whitespace-pre-wrap">{result.extracted_text}</p>
             </div>
 
             <div>
               <h2 className="font-fraunces text-3xl font-semibold text-stone-900 mb-6">
-                Your Medications
+                Your Medications ({result.medications.length})
               </h2>
               <div className="space-y-4">
                 {result.medications.map((medication, index) => (
@@ -168,7 +216,7 @@ const UploadPage = () => {
                       </div>
                       {medication.with_food && (
                         <span className="bg-clay/10 text-clay px-4 py-2 rounded-full text-sm font-jakarta font-medium">
-                          Take with food
+                          🍽️ Take with food
                         </span>
                       )}
                     </div>
@@ -176,7 +224,7 @@ const UploadPage = () => {
                     <div className="space-y-4">
                       <div>
                         <h4 className="text-sm font-bold uppercase tracking-widest text-stone-500 font-jakarta mb-2">
-                          What it does
+                          💊 What it does
                         </h4>
                         <p className="text-stone-700 font-jakarta leading-relaxed">
                           {medication.plain_language_explanation}
@@ -185,12 +233,25 @@ const UploadPage = () => {
 
                       <div className="bg-sage/5 p-4 rounded-2xl">
                         <h4 className="text-sm font-bold uppercase tracking-widest text-sage font-jakarta mb-2">
-                          Why timing matters
+                          ⏰ Why timing matters
                         </h4>
                         <p className="text-stone-700 font-jakarta leading-relaxed">
                           {medication.why_timing_matters}
                         </p>
                       </div>
+
+                      {medication.warnings && medication.warnings.length > 0 && (
+                        <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-2xl">
+                          <h4 className="text-sm font-bold uppercase tracking-widest text-yellow-700 font-jakarta mb-2">
+                            ⚠️ Important Safety
+                          </h4>
+                          {medication.warnings.map((warning, idx) => (
+                            <p key={idx} className="text-stone-700 font-jakarta">
+                              {warning}
+                            </p>
+                          ))}
+                        </div>
+                      )}
 
                       {medication.timing && medication.timing.length > 0 && (
                         <div className="flex flex-wrap gap-2">

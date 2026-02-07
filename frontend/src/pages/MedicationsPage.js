@@ -12,6 +12,8 @@ const MedicationsPage = () => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [checkingContraindications, setCheckingContraindications] = useState(false);
   const [contraindictionResult, setContraindictionResult] = useState(null);
+  const [languages, setLanguages] = useState({});
+  const [selectedLanguage, setSelectedLanguage] = useState('en');
   
   const [newMed, setNewMed] = useState({
     name: '',
@@ -22,9 +24,19 @@ const MedicationsPage = () => {
   });
 
   useEffect(() => {
+    fetchLanguages();
     fetchMedications();
     fetchPrescriptions();
   }, []);
+
+  const fetchLanguages = async () => {
+    try {
+      const response = await axios.get(`${API}/languages`);
+      setLanguages(response.data.languages);
+    } catch (error) {
+      console.error('Error fetching languages:', error);
+    }
+  };
 
   const fetchMedications = async () => {
     try {
@@ -56,8 +68,11 @@ const MedicationsPage = () => {
 
     setLoading(true);
     try {
-      await axios.post(`${API}/medications`, newMed);
-      toast.success('Medication added successfully!');
+      await axios.post(`${API}/medications`, {
+        ...newMed,
+        preferred_language: selectedLanguage
+      });
+      toast.success('Medication added successfully! 🎉');
       setNewMed({
         name: '',
         dosage: '',
@@ -90,7 +105,8 @@ const MedicationsPage = () => {
     try {
       const response = await axios.post(`${API}/contraindications/check`, {
         medication_name: medicationName,
-        current_medications: currentMedNames
+        current_medications: currentMedNames,
+        preferred_language: selectedLanguage
       });
       setContraindictionResult({ medication: medicationName, ...response.data });
     } catch (error) {
@@ -109,22 +125,36 @@ const MedicationsPage = () => {
   return (
     <div className="min-h-screen bg-paper py-12">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="mb-12 flex items-center justify-between">
+        <div className="mb-12 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="font-fraunces text-5xl md:text-7xl font-light leading-[0.95] text-stone-900 mb-4">
               My Medications
             </h1>
             <p className="text-lg md:text-xl leading-relaxed text-stone-600 font-jakarta">
-              View and manage all your medications in one place
+              🌍 Manage medications from prescriptions in any language
             </p>
           </div>
-          <button
-            onClick={() => setShowAddForm(!showAddForm)}
-            className="rounded-full bg-sage text-white px-6 py-3 font-semibold font-jakarta shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5 active:translate-y-0"
-            data-testid="add-medication-button"
-          >
-            {showAddForm ? 'Cancel' : '+ Add Medication'}
-          </button>
+          <div className="flex gap-3">
+            <select
+              value={selectedLanguage}
+              onChange={(e) => setSelectedLanguage(e.target.value)}
+              className="h-12 rounded-full border-stone-200 bg-white px-4 focus:ring-2 focus:ring-sage/20 focus:border-sage transition-all font-jakarta"
+              data-testid="language-selector-medications"
+            >
+              {Object.entries(languages).map(([code, name]) => (
+                <option key={code} value={code}>
+                  {name}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={() => setShowAddForm(!showAddForm)}
+              className="rounded-full bg-sage text-white px-6 py-3 font-semibold font-jakarta shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-0.5 active:translate-y-0 whitespace-nowrap"
+              data-testid="add-medication-button"
+            >
+              {showAddForm ? 'Cancel' : '+ Add Medication'}
+            </button>
+          </div>
         </div>
 
         {showAddForm && (
@@ -260,11 +290,16 @@ const MedicationsPage = () => {
                     <p className="text-stone-600 font-jakarta mt-1">
                       {medication.dosage} • {medication.frequency}
                     </p>
+                    {medication.translated_to && (
+                      <span className="inline-block mt-2 bg-sage/10 text-sage px-3 py-1 rounded-full text-xs font-jakarta font-medium">
+                        🌐 Translated to {languages[medication.translated_to] || 'English'}
+                      </span>
+                    )}
                   </div>
                   <div className="flex gap-2">
                     {medication.with_food && (
                       <span className="bg-clay/10 text-clay px-4 py-2 rounded-full text-sm font-jakarta font-medium">
-                        Take with food
+                        🍽️ Take with food
                       </span>
                     )}
                     <button
@@ -281,7 +316,7 @@ const MedicationsPage = () => {
                 <div className="space-y-4">
                   <div>
                     <h4 className="text-sm font-bold uppercase tracking-widest text-stone-500 font-jakarta mb-2">
-                      What it does
+                      💊 What it does
                     </h4>
                     <p className="text-stone-700 font-jakarta leading-relaxed">
                       {medication.plain_language_explanation}
@@ -290,12 +325,23 @@ const MedicationsPage = () => {
 
                   <div className="bg-sage/5 p-4 rounded-2xl">
                     <h4 className="text-sm font-bold uppercase tracking-widest text-sage font-jakarta mb-2">
-                      Why timing matters
+                      ⏰ Why timing matters
                     </h4>
                     <p className="text-stone-700 font-jakarta leading-relaxed">
                       {medication.why_timing_matters}
                     </p>
                   </div>
+
+                  {medication.warnings && medication.warnings.length > 0 && medication.warnings[0] && (
+                    <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-2xl">
+                      <h4 className="text-sm font-bold uppercase tracking-widest text-yellow-700 font-jakarta mb-2">
+                        ⚠️ Important Safety
+                      </h4>
+                      {medication.warnings.map((warning, idx) => (
+                        warning && <p key={idx} className="text-stone-700 font-jakarta">{warning}</p>
+                      ))}
+                    </div>
+                  )}
 
                   {medication.timing && medication.timing.length > 0 && (
                     <div className="flex flex-wrap gap-2">
