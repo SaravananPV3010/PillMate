@@ -92,14 +92,14 @@ async def upload_prescription(data: PrescriptionCreate):
         chat = LlmChat(
             api_key=EMERGENT_LLM_KEY,
             session_id=f"prescription-{uuid.uuid4()}",
-            system_message="You are a medical prescription analysis expert. Extract medication information from prescription images accurately. Return only valid JSON."
+            system_message="You are a medical prescription analysis expert. Extract medication information from prescription images accurately. Always return valid JSON without markdown formatting."
         ).with_model("gemini", "gemini-3-flash-preview")
         
         image_content = ImageContent(image_base64=data.image_base64)
         
         user_message = UserMessage(
             text="""Analyze this prescription image and extract all medication information. 
-            Return ONLY a valid JSON object with this exact structure (no markdown, no extra text):
+            Return ONLY a valid JSON object (no markdown code blocks, no extra text):
             {
                 "extracted_text": "full text from prescription",
                 "medications": [
@@ -108,26 +108,52 @@ async def upload_prescription(data: PrescriptionCreate):
                         "dosage": "dosage amount",
                         "frequency": "how often",
                         "timing": ["morning", "afternoon", "night"],
-                        "duration": "duration if specified",
+                        "duration": "duration if specified or empty string",
                         "with_food": true/false
                     }
                 ]
+            }
+            
+            If the image is unclear or not a prescription, return:
+            {
+                "extracted_text": "Unable to read prescription clearly",
+                "medications": []
             }""",
             file_contents=[image_content]
         )
         
         response = await chat.send_message(user_message)
         
+        logging.info(f"Raw Gemini response: {response[:200]}...")
+        
         response_text = response.strip()
-        if response_text.startswith('```json'):
-            response_text = response_text[7:]
-        if response_text.startswith('```'):
-            response_text = response_text[3:]
-        if response_text.endswith('```'):
-            response_text = response_text[:-3]
+        
+        # Remove markdown code blocks
+        if '```json' in response_text:
+            response_text = response_text.split('```json')[1].split('```')[0].strip()
+        elif '```' in response_text:
+            response_text = response_text.split('```')[1].split('```')[0].strip()
+        
+        # Try to find JSON object in the response
+        if not response_text.startswith('{'):
+            # Look for first { and last }
+            start = response_text.find('{')
+            end = response_text.rfind('}')
+            if start != -1 and end != -1:
+                response_text = response_text[start:end+1]
+        
         response_text = response_text.strip()
         
+        if not response_text:
+            raise ValueError("Empty response from Gemini Vision API")
+        
         extraction_result = json.loads(response_text)
+        
+        # Validate the response structure
+        if 'extracted_text' not in extraction_result:
+            extraction_result['extracted_text'] = 'No text extracted'
+        if 'medications' not in extraction_result:
+            extraction_result['medications'] = []
         
         medications_with_explanation = []
         for med in extraction_result.get("medications", []):
