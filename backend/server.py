@@ -25,9 +25,23 @@ api_router = APIRouter(prefix="/api")
 
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
 
+SUPPORTED_LANGUAGES = {
+    "en": "English",
+    "es": "Spanish",
+    "hi": "Hindi",
+    "ar": "Arabic",
+    "zh": "Chinese",
+    "fr": "French",
+    "de": "German",
+    "pt": "Portuguese",
+    "ru": "Russian",
+    "ja": "Japanese"
+}
+
 class PrescriptionCreate(BaseModel):
     image_base64: str
     patient_id: Optional[str] = None
+    preferred_language: str = "en"
 
 class Medication(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -42,6 +56,8 @@ class Medication(BaseModel):
     why_timing_matters: str
     with_food: bool = False
     warnings: List[str] = []
+    original_language: Optional[str] = None
+    translated_to: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class Prescription(BaseModel):
@@ -51,6 +67,8 @@ class Prescription(BaseModel):
     patient_id: Optional[str] = None
     image_data: str
     extracted_text: str
+    detected_language: str
+    preferred_language: str
     medications: List[Medication]
     analysis_complete: bool = False
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -62,63 +80,65 @@ class MedicationCreate(BaseModel):
     timing: List[str]
     duration: Optional[str] = None
     with_food: bool = False
+    preferred_language: str = "en"
 
 class ContraindictionCheck(BaseModel):
     medication_name: str
     current_medications: List[str]
+    preferred_language: str = "en"
 
 class ContraindictionResult(BaseModel):
     has_contraindications: bool
     warnings: List[str]
     recommendations: str
 
-class AdherenceSchedule(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    medication_id: str
-    medication_name: str
-    schedule_times: List[str]
-    nudge_messages: List[str]
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+class LanguageList(BaseModel):
+    languages: dict
 
 @api_router.get("/")
 async def root():
-    return {"message": "PillGuide API - Prescription Adherence System"}
+    return {"message": "PillGuide API - Prescription Adherence System with Multi-Language Support"}
+
+@api_router.get("/languages", response_model=LanguageList)
+async def get_supported_languages():
+    return {"languages": SUPPORTED_LANGUAGES}
 
 @api_router.post("/prescriptions/upload", response_model=Prescription)
 async def upload_prescription(data: PrescriptionCreate):
     try:
+        # Step 1: Detect language and extract prescription
         chat = LlmChat(
             api_key=EMERGENT_LLM_KEY,
             session_id=f"prescription-{uuid.uuid4()}",
-            system_message="You are a medical prescription analysis expert. Extract medication information from prescription images accurately. Always return valid JSON without markdown formatting."
+            system_message="You are a multilingual medical prescription analysis expert. You can read prescriptions in any language and extract medication information accurately. Always return valid JSON without markdown."
         ).with_model("gemini", "gemini-3-flash-preview")
         
         image_content = ImageContent(image_base64=data.image_base64)
         
         user_message = UserMessage(
-            text="""Analyze this prescription image and extract all medication information. 
-            Return ONLY a valid JSON object (no markdown code blocks, no extra text):
+            text="""Analyze this prescription image. It may be in ANY language (English, Spanish, Hindi, Arabic, Chinese, French, etc.).
+            
+            IMPORTANT: Read the prescription in its original language first, then provide the information.
+            
+            Return ONLY valid JSON (no markdown):
             {
-                "extracted_text": "full text from prescription",
+                "detected_language": "language code (en/es/hi/ar/zh/fr/de/pt/ru/ja)",
+                "detected_language_name": "language name",
+                "extracted_text": "full original text from prescription in original language",
                 "medications": [
                     {
-                        "name": "medication name",
-                        "dosage": "dosage amount",
-                        "frequency": "how often",
-                        "timing": ["morning", "afternoon", "night"],
-                        "duration": "duration if specified or empty string",
+                        "name": "medication name in original language",
+                        "name_english": "medication name in English",
+                        "dosage": "dosage in original format",
+                        "frequency": "frequency in original language",
+                        "timing": ["timing indicators"],
+                        "duration": "duration if specified",
                         "with_food": true/false
                     }
                 ]
             }
             
-            If the image is unclear or not a prescription, return:
-            {
-                "extracted_text": "Unable to read prescription clearly",
-                "medications": []
-            }""",
+            If unclear, return: {"detected_language": "unknown", "detected_language_name": "Unknown", "extracted_text": "Unable to read", "medications": []}""",
             file_contents=[image_content]
         )
         
@@ -136,7 +156,6 @@ async def upload_prescription(data: PrescriptionCreate):
         
         # Try to find JSON object in the response
         if not response_text.startswith('{'):
-            # Look for first { and last }
             start = response_text.find('{')
             end = response_text.rfind('}')
             if start != -1 and end != -1:
@@ -154,28 +173,41 @@ async def upload_prescription(data: PrescriptionCreate):
             extraction_result['extracted_text'] = 'No text extracted'
         if 'medications' not in extraction_result:
             extraction_result['medications'] = []
+        if 'detected_language' not in extraction_result:
+            extraction_result['detected_language'] = 'unknown'
+        if 'detected_language_name' not in extraction_result:
+            extraction_result['detected_language_name'] = 'Unknown'
         
+        detected_lang = extraction_result['detected_language']
+        user_lang = data.preferred_language
+        
+        # Step 2: Get explanations in user's preferred language
         medications_with_explanation = []
         for med in extraction_result.get("medications", []):
-            # Skip if no medication name
             if not med.get('name'):
                 continue
                 
             explanation_chat = LlmChat(
                 api_key=EMERGENT_LLM_KEY,
                 session_id=f"explanation-{uuid.uuid4()}",
-                system_message="You are a healthcare communication expert. Explain medical information in simple, plain language. Always return valid JSON without markdown."
+                system_message=f"You are a multilingual healthcare communication expert. Explain medical information in {SUPPORTED_LANGUAGES.get(user_lang, 'English')} using simple, plain language. Always return valid JSON without markdown."
             ).with_model("gemini", "gemini-3-flash-preview")
             
+            med_name = med.get('name_english', med.get('name', 'Unknown'))
+            
             explanation_msg = UserMessage(
-                text=f"""For the medication '{med.get('name', 'Unknown')}' at dosage '{med.get('dosage', 'Unknown')}' taken {med.get('frequency', 'as prescribed')}:
+                text=f"""For the medication '{med_name}' (dosage: '{med.get('dosage', 'Unknown')}', frequency: {med.get('frequency', 'as prescribed')}):
+                
+                Provide explanation in {SUPPORTED_LANGUAGES.get(user_lang, 'English')} language:
                 1. Explain what this medication does in simple, plain language (2-3 sentences)
-                2. Explain why the timing matters (using Nudge Theory - explain the 'why' to increase adherence)
+                2. Explain why timing matters (using Nudge Theory - explain the 'why' to increase adherence)
+                3. Add a safety reminder about dosage accuracy
                 
                 Return ONLY valid JSON (no markdown):
                 {{
-                    "plain_explanation": "simple explanation",
-                    "why_timing_matters": "why timing is important"
+                    "plain_explanation": "simple explanation in {SUPPORTED_LANGUAGES.get(user_lang, 'English')}",
+                    "why_timing_matters": "why timing is important in {SUPPORTED_LANGUAGES.get(user_lang, 'English')}",
+                    "dosage_safety_reminder": "brief reminder about taking correct dosage"
                 }}"""
             )
             
@@ -200,26 +232,34 @@ async def upload_prescription(data: PrescriptionCreate):
                 
                 # Validate explanation data
                 if 'plain_explanation' not in explanation_data:
-                    explanation_data['plain_explanation'] = f"This medication is prescribed for your health condition. Please consult your doctor for specific information about {med.get('name', 'this medication')}."
+                    explanation_data['plain_explanation'] = f"This medication is prescribed for your health condition. Please consult your doctor for specific information."
                 if 'why_timing_matters' not in explanation_data:
                     explanation_data['why_timing_matters'] = "Taking medication at the right time helps maintain consistent levels in your body for optimal effectiveness."
+                if 'dosage_safety_reminder' not in explanation_data:
+                    explanation_data['dosage_safety_reminder'] = "Always take the exact dosage prescribed by your doctor."
             except Exception as e:
                 logging.error(f"Error getting explanation: {str(e)}")
                 explanation_data = {
                     'plain_explanation': f"This medication is prescribed for your health. Please consult your healthcare provider for detailed information.",
-                    'why_timing_matters': "Timing helps maintain steady medication levels for best results."
+                    'why_timing_matters': "Timing helps maintain steady medication levels for best results.",
+                    'dosage_safety_reminder': "Always follow the prescribed dosage exactly."
                 }
             
+            # Combine explanation with dosage safety
+            full_explanation = f"{explanation_data['plain_explanation']} ⚠️ {explanation_data.get('dosage_safety_reminder', '')}"
+            
             medication_obj = Medication(
-                name=med.get('name', 'Unknown Medication'),
+                name=med.get('name_english', med.get('name', 'Unknown Medication')),
                 dosage=med.get('dosage', 'As prescribed'),
                 frequency=med.get('frequency', 'As prescribed'),
                 timing=med.get('timing', []),
                 duration=med.get('duration'),
                 with_food=med.get('with_food', False),
-                plain_language_explanation=explanation_data['plain_explanation'],
+                plain_language_explanation=full_explanation,
                 why_timing_matters=explanation_data['why_timing_matters'],
-                warnings=[]
+                warnings=[explanation_data.get('dosage_safety_reminder', '')],
+                original_language=detected_lang,
+                translated_to=user_lang
             )
             medications_with_explanation.append(medication_obj)
         
@@ -227,6 +267,8 @@ async def upload_prescription(data: PrescriptionCreate):
             patient_id=data.patient_id,
             image_data=data.image_base64[:100],
             extracted_text=extraction_result.get("extracted_text", ""),
+            detected_language=detected_lang,
+            preferred_language=user_lang,
             medications=medications_with_explanation,
             analysis_complete=True
         )
@@ -266,32 +308,42 @@ async def add_medication_manually(data: MedicationCreate):
         chat = LlmChat(
             api_key=EMERGENT_LLM_KEY,
             session_id=f"medication-{uuid.uuid4()}",
-            system_message="You are a healthcare communication expert. Explain medical information in simple, plain language."
+            system_message=f"You are a multilingual healthcare communication expert. Explain medical information in {SUPPORTED_LANGUAGES.get(data.preferred_language, 'English')} using simple, plain language. Always return valid JSON."
         ).with_model("gemini", "gemini-3-flash-preview")
         
         explanation_msg = UserMessage(
             text=f"""For the medication '{data.name}' at dosage '{data.dosage}' taken {data.frequency}:
+            
+            Provide explanation in {SUPPORTED_LANGUAGES.get(data.preferred_language, 'English')} language:
             1. Explain what this medication typically does in simple, plain language (2-3 sentences)
             2. Explain why the timing matters (using Nudge Theory)
+            3. Add a safety reminder about dosage accuracy
             
             Return ONLY valid JSON:
             {{
                 "plain_explanation": "simple explanation",
-                "why_timing_matters": "why timing is important"
+                "why_timing_matters": "why timing is important",
+                "dosage_safety_reminder": "brief dosage safety reminder"
             }}"""
         )
         
         explanation_response = await chat.send_message(explanation_msg)
         explanation_text = explanation_response.strip()
-        if explanation_text.startswith('```json'):
-            explanation_text = explanation_text[7:]
-        if explanation_text.startswith('```'):
-            explanation_text = explanation_text[3:]
-        if explanation_text.endswith('```'):
-            explanation_text = explanation_text[:-3]
-        explanation_text = explanation_text.strip()
+        if '```json' in explanation_text:
+            explanation_text = explanation_text.split('```json')[1].split('```')[0].strip()
+        elif '```' in explanation_text:
+            explanation_text = explanation_text.split('```')[1].split('```')[0].strip()
         
+        if not explanation_text.startswith('{'):
+            start = explanation_text.find('{')
+            end = explanation_text.rfind('}')
+            if start != -1 and end != -1:
+                explanation_text = explanation_text[start:end+1]
+        
+        explanation_text = explanation_text.strip()
         explanation_data = json.loads(explanation_text)
+        
+        full_explanation = f"{explanation_data['plain_explanation']} ⚠️ {explanation_data.get('dosage_safety_reminder', '')}"
         
         medication = Medication(
             name=data.name,
@@ -300,9 +352,10 @@ async def add_medication_manually(data: MedicationCreate):
             timing=data.timing,
             duration=data.duration,
             with_food=data.with_food,
-            plain_language_explanation=explanation_data['plain_explanation'],
+            plain_language_explanation=full_explanation,
             why_timing_matters=explanation_data['why_timing_matters'],
-            warnings=[]
+            warnings=[explanation_data.get('dosage_safety_reminder', '')],
+            translated_to=data.preferred_language
         )
         
         doc = medication.model_dump()
@@ -331,11 +384,13 @@ async def check_contraindications(data: ContraindictionCheck):
         chat = LlmChat(
             api_key=EMERGENT_LLM_KEY,
             session_id=f"contraindication-{uuid.uuid4()}",
-            system_message="You are a medical safety expert. Check for basic contraindications and drug interactions."
+            system_message=f"You are a multilingual medical safety expert. Provide contraindication information in {SUPPORTED_LANGUAGES.get(data.preferred_language, 'English')}. Always return valid JSON."
         ).with_model("gemini", "gemini-3-flash-preview")
         
         user_message = UserMessage(
             text=f"""Check if '{data.medication_name}' has any basic contraindications or interactions with these current medications: {', '.join(data.current_medications)}.
+            
+            Provide response in {SUPPORTED_LANGUAGES.get(data.preferred_language, 'English')} language.
             
             Return ONLY valid JSON:
             {{
@@ -347,14 +402,18 @@ async def check_contraindications(data: ContraindictionCheck):
         
         response = await chat.send_message(user_message)
         response_text = response.strip()
-        if response_text.startswith('```json'):
-            response_text = response_text[7:]
-        if response_text.startswith('```'):
-            response_text = response_text[3:]
-        if response_text.endswith('```'):
-            response_text = response_text[:-3]
-        response_text = response_text.strip()
+        if '```json' in response_text:
+            response_text = response_text.split('```json')[1].split('```')[0].strip()
+        elif '```' in response_text:
+            response_text = response_text.split('```')[1].split('```')[0].strip()
         
+        if not response_text.startswith('{'):
+            start = response_text.find('{')
+            end = response_text.rfind('}')
+            if start != -1 and end != -1:
+                response_text = response_text[start:end+1]
+        
+        response_text = response_text.strip()
         result = json.loads(response_text)
         
         return ContraindictionResult(**result)
