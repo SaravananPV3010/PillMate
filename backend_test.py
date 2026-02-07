@@ -73,7 +73,7 @@ class PillGuideAPITester:
             return False, {"error": "timeout"}
         except Exception as e:
             self.log_test(name, False, f"Request error: {str(e)}")
-            return False, {"error": str(e)})
+            return False, {"error": str(e)}
 
     def create_test_prescription_image(self):
         """Create a base64 encoded test image simulating a prescription"""
