@@ -1,0 +1,174 @@
+{
+  "identity": {
+    "name": "E1 - The Anti-AI Designer",
+    "persona": "The Empathetic Architect",
+    "philosophy": "Fusion over Imitation. Emotion First. Content is King. Zoom in. Negative Space. Contrast.",
+    "mission": "Create a healthcare interface that feels like a caring human companion, not a sterile database. Prioritize trust, clarity, and behavioral nudges."
+  },
+  "typography": {
+    "headings": {
+      "family": "\"Fraunces\", serif",
+      "weights": [
+        300,
+        400,
+        600
+      ],
+      "usage": "Use for all major section headers, hero titles, and 'emotional' messaging. Variable weight allows for expressive emphasis.",
+      "letter_spacing": "tracking-tight"
+    },
+    "body": {
+      "family": "\"Plus Jakarta Sans\", sans-serif",
+      "weights": [
+        400,
+        500,
+        700
+      ],
+      "usage": "Use for all UI elements, medication instructions, data tables, and navigation. Optimized for high legibility at small sizes.",
+      "letter_spacing": "tracking-normal"
+    },
+    "scale": {
+      "h1": "text-5xl md:text-7xl font-light leading-[0.95]",
+      "h2": "text-4xl md:text-5xl font-normal leading-tight",
+      "h3": "text-2xl md:text-3xl font-semibold",
+      "body-lg": "text-lg md:text-xl leading-relaxed",
+      "body-base": "text-base leading-relaxed",
+      "label": "text-sm font-bold uppercase tracking-widest text-muted-foreground"
+    }
+  },
+  "colors": {
+    "palette": {
+      "primary": {
+        "name": "Sage Wisdom",
+        "hex": "#4A6C58",
+        "hsl": "145 19% 36%",
+        "usage": "Primary buttons, active states, key success metrics."
+      },
+      "secondary": {
+        "name": "Clay Earth",
+        "hex": "#C88D73",
+        "hsl": "18 45% 62%",
+        "usage": "Important alerts, 'Due Soon' reminders, accent highlights."
+      },
+      "background": {
+        "name": "Paper White",
+        "hex": "#FDFCF8",
+        "hsl": "48 20% 98%",
+        "usage": "Main application background. Avoid pure #FFFFFF to reduce eye strain."
+      },
+      "surface": {
+        "name": "Clean White",
+        "hex": "#FFFFFF",
+        "hsl": "0 0% 100%",
+        "usage": "Cards, modals, input fields."
+      },
+      "text": {
+        "primary": "#1A1A1A",
+        "secondary": "#525252",
+        "muted": "#A3A3A3"
+      },
+      "status": {
+        "success": "#4A6C58",
+        "error": "#E66868",
+        "warning": "#F2C94C",
+        "info": "#60A5FA"
+      }
+    },
+    "theme_strategy": "Light Theme Default (Trust & Clarity). Dark theme is secondary and should be a deep 'Midnight Forest' (very dark green/charcoal), not pure black."
+  },
+  "layout_and_grid": {
+    "strategy": "The Bento Grid - Mobile First",
+    "container": "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8",
+    "spacing": {
+      "section_gap": "py-24 md:py-32",
+      "component_gap": "gap-8",
+      "internal_padding": "p-6 md:p-8"
+    },
+    "modes": {
+      "marketing": {
+        "description": "Asymmetric 'Tetris' grid. Large hero images, offset text blocks.",
+        "classes": "grid grid-cols-1 md:grid-cols-12 gap-8"
+      },
+      "dashboard": {
+        "description": "High-density but breathable. Cards align perfectly.",
+        "classes": "grid grid-cols-1 md:grid-cols-3 gap-6"
+      }
+    }
+  },
+  "components": {
+    "buttons": {
+      "style": "Pill-shaped (rounded-full). High padding.",
+      "classes": "rounded-full px-8 py-4 font-semibold shadow-lg hover:shadow-xl transition-all hover:-translate-y-0.5 active:translate-y-0"
+    },
+    "cards": {
+      "style": "Soft, distinct surfaces. 'Clean White' on 'Paper White'.",
+      "classes": "bg-white rounded-3xl border border-stone-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-8 hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-shadow duration-300"
+    },
+    "inputs": {
+      "style": "Large, accessible touch targets.",
+      "classes": "h-14 rounded-2xl border-stone-200 bg-stone-50 px-4 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-lg"
+    },
+    "navigation": {
+      "style": "Floating island or clean top bar.",
+      "classes": "backdrop-blur-xl bg-white/80 border-b border-stone-100/50 sticky top-0 z-50"
+    }
+  },
+  "visual_enhancers": {
+    "shadows": "Soft, diffused, ambient. No harsh black shadows.",
+    "borders": "Subtle. Use `border-stone-100` or `border-stone-200`. Avoid thick dark borders.",
+    "radius": "Generous. `rounded-2xl` or `rounded-3xl` for cards. `rounded-full` for buttons.",
+    "texture": "Subtle noise overlay on the background to give a paper feel (optional but recommended)."
+  },
+  "motion": {
+    "philosophy": "Calm & Deliberate. No fast jarring movements.",
+    "transitions": "transition-all duration-500 ease-out",
+    "micro_interactions": {
+      "hover": "Slight lift (-2px) and shadow bloom.",
+      "click": "Scale down (0.98).",
+      "entrance": "Fade up with blur (y: 20px, blur: 10px)."
+    }
+  },
+  "image_urls": {
+    "hero_section": {
+      "url": "https://images.unsplash.com/photo-1590905775253-a4f0f3c426ff?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "alt": "Warm, smiling elderly woman feeling confident",
+      "description": "Use in the main hero section to establish trust and human connection."
+    },
+    "upload_feature": {
+      "url": "https://images.unsplash.com/photo-1563213126-a4273aed2016?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "alt": "Hand organizing medication",
+      "description": "Use near the 'Upload Prescription' or 'How it Works' section."
+    },
+    "morning_routine": {
+      "url": "https://images.unsplash.com/photo-1768168211215-231b9a487d90?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "alt": "Peaceful morning coffee routine",
+      "description": "Use in the 'Adherence Schedule' or 'Morning Nudge' explanation section."
+    },
+    "placeholders": {
+        "user_avatar": "https://api.dicebear.com/7.x/notionists/svg?seed=Felix",
+        "doctor_avatar": "https://api.dicebear.com/7.x/notionists/svg?seed=Sarah"
+    }
+  },
+  "accessibility_checklist": [
+    "Text contrast ratio must be > 4.5:1 for normal text.",
+    "Interactive elements must be at least 44x44px.",
+    "Focus states must be clearly visible (thick ring).",
+    "Do not rely on color alone for status (use icons + text).",
+    "Font size for body text should not be smaller than 16px (1rem)."
+  ],
+  "instructions_to_main_agent": [
+    "1. UPDATE TAILWIND CONFIG: Add the custom colors (sage, clay, paper) and fonts (Fraunces, Plus Jakarta Sans) to `tailwind.config.js`.",
+    "2. INSTALL FONTS: Add the Google Fonts import link to `index.css` or `index.html`. Imports: https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,100..900;1,9..144,100..900&family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap",
+    "3. SHADCN CUSTOMIZATION: Override the default 'New York' style. We want rounded, soft, and warm. Change `radius` to `1rem` or higher.",
+    "4. LIGHT MODE FIRST: Build specifically for the Light Theme defined in `colors`. Dark mode is secondary.",
+    "5. NUDGE THEORY UI: When displaying medication schedules, always include a 'Why' section. Example: 'Take with food' -> Tooltip: 'Food helps absorption and prevents stomach upset'.",
+    "6. USE IMAGES: Use the provided Unsplash URLs. Do not use placeholders.",
+    "7. NO GENERIC GRADIENTS: Use solid colors or very subtle, noise-textured gradients."
+  ],
+   "UNIVERSAL_GUIDELINES": [
+        "Avoid generic 'AI slop' aesthetics.",
+        "Don't center everything; use asymmetry.",
+        "Micro-animations are mandatory.",
+        "Use 2-3x more spacing than usual.",
+        "Add data-testid to all interactive elements."
+    ]
+}
