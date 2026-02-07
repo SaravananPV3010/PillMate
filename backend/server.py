@@ -157,40 +157,63 @@ async def upload_prescription(data: PrescriptionCreate):
         
         medications_with_explanation = []
         for med in extraction_result.get("medications", []):
+            # Skip if no medication name
+            if not med.get('name'):
+                continue
+                
             explanation_chat = LlmChat(
                 api_key=EMERGENT_LLM_KEY,
                 session_id=f"explanation-{uuid.uuid4()}",
-                system_message="You are a healthcare communication expert. Explain medical information in simple, plain language."
+                system_message="You are a healthcare communication expert. Explain medical information in simple, plain language. Always return valid JSON without markdown."
             ).with_model("gemini", "gemini-3-flash-preview")
             
             explanation_msg = UserMessage(
-                text=f"""For the medication '{med['name']}' at dosage '{med['dosage']}' taken {med['frequency']}:
+                text=f"""For the medication '{med.get('name', 'Unknown')}' at dosage '{med.get('dosage', 'Unknown')}' taken {med.get('frequency', 'as prescribed')}:
                 1. Explain what this medication does in simple, plain language (2-3 sentences)
                 2. Explain why the timing matters (using Nudge Theory - explain the 'why' to increase adherence)
                 
-                Return ONLY valid JSON:
+                Return ONLY valid JSON (no markdown):
                 {{
                     "plain_explanation": "simple explanation",
                     "why_timing_matters": "why timing is important"
                 }}"""
             )
             
-            explanation_response = await explanation_chat.send_message(explanation_msg)
-            explanation_text = explanation_response.strip()
-            if explanation_text.startswith('```json'):
-                explanation_text = explanation_text[7:]
-            if explanation_text.startswith('```'):
-                explanation_text = explanation_text[3:]
-            if explanation_text.endswith('```'):
-                explanation_text = explanation_text[:-3]
-            explanation_text = explanation_text.strip()
-            
-            explanation_data = json.loads(explanation_text)
+            try:
+                explanation_response = await explanation_chat.send_message(explanation_msg)
+                explanation_text = explanation_response.strip()
+                
+                # Remove markdown
+                if '```json' in explanation_text:
+                    explanation_text = explanation_text.split('```json')[1].split('```')[0].strip()
+                elif '```' in explanation_text:
+                    explanation_text = explanation_text.split('```')[1].split('```')[0].strip()
+                
+                # Find JSON object
+                if not explanation_text.startswith('{'):
+                    start = explanation_text.find('{')
+                    end = explanation_text.rfind('}')
+                    if start != -1 and end != -1:
+                        explanation_text = explanation_text[start:end+1]
+                
+                explanation_data = json.loads(explanation_text)
+                
+                # Validate explanation data
+                if 'plain_explanation' not in explanation_data:
+                    explanation_data['plain_explanation'] = f"This medication is prescribed for your health condition. Please consult your doctor for specific information about {med.get('name', 'this medication')}."
+                if 'why_timing_matters' not in explanation_data:
+                    explanation_data['why_timing_matters'] = "Taking medication at the right time helps maintain consistent levels in your body for optimal effectiveness."
+            except Exception as e:
+                logging.error(f"Error getting explanation: {str(e)}")
+                explanation_data = {
+                    'plain_explanation': f"This medication is prescribed for your health. Please consult your healthcare provider for detailed information.",
+                    'why_timing_matters': "Timing helps maintain steady medication levels for best results."
+                }
             
             medication_obj = Medication(
-                name=med['name'],
-                dosage=med['dosage'],
-                frequency=med['frequency'],
+                name=med.get('name', 'Unknown Medication'),
+                dosage=med.get('dosage', 'As prescribed'),
+                frequency=med.get('frequency', 'As prescribed'),
                 timing=med.get('timing', []),
                 duration=med.get('duration'),
                 with_food=med.get('with_food', False),
@@ -216,6 +239,9 @@ async def upload_prescription(data: PrescriptionCreate):
         await db.prescriptions.insert_one(doc)
         
         return prescription
+    except json.JSONDecodeError as e:
+        logging.error(f"JSON parsing error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to parse AI response. The prescription image may be unclear or invalid. Please try a clearer image.")
     except Exception as e:
         logging.error(f"Error analyzing prescription: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to analyze prescription: {str(e)}")
